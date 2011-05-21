@@ -13,7 +13,12 @@ import twisted.names.server
 import twisted.names.authority
 import twisted.names.common
 import twisted.names as names
-from twisted.internet import reactor, defer
+try:
+    from twisted.internet import epollreactor
+    epollreactor.install()
+except:
+    pass
+from twisted.internet import defer, reactor
 from twisted.python import failure
 
 PROGNAME = os.path.basename(sys.argv[0])
