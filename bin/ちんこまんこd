@@ -1,0 +1,265 @@
+#!/usr/bin/python
+
+import os
+import sys
+import re
+import optparse
+from iniparse import ini
+import time
+
+import twisted.names.dns
+import twisted.names.server
+import twisted.names.authority
+import twisted.names.common
+import twisted.names as names
+from twisted.internet import reactor, defer
+from twisted.python import failure
+
+PROGNAME = os.path.basename(sys.argv[0])
+
+PREFIX = os.path.dirname(os.path.realpath(os.path.dirname(sys.argv[0])))
+
+ETC_DIR = os.path.join(PREFIX, 'etc')
+PKG_ETC_DIR = os.path.join(ETC_DIR, PROGNAME)
+VAR_DIR = os.path.join(PREFIX, 'var', 'lib')
+PKG_VAR_DIR = os.path.join(VAR_DIR, PROGNAME)
+
+DEFAULTS = {
+    'zone_repo_dir': os.path.join(PKG_VAR_DIR, 'zones'),
+    'config_file': os.path.join(PKG_ETC_DIR, 'config.ini'),
+    'serial_file': os.path.join(PKG_VAR_DIR, 'serial'),
+    'soa': dict(admin='', refresh=120, retry=60, expire=86400, minimum=43200, ttl=60)
+    }
+
+class AnyAuthority(names.common.ResolverBase):
+    def __init__(self, origin, v4addresses, v6addresses, nameservers, serial, admin='', refresh=120, retry=60, expire=86400, minimum=43200, ttl=60):
+        names.common.ResolverBase.__init__(self)
+        self.origin = origin
+        self.v4addresses = v4addresses
+        self.v6addresses = v6addresses
+        self.nameservers = nameservers
+        self.serial = serial
+        self.admin = admin
+        self.refresh = refresh
+        self.retry = retry
+        self.expire = expire
+        self.minimum = minimum
+        self.ttl = ttl
+        self.cache = {}
+
+    def get_records(self, domain):
+        retval = self.cache.get(domain, None)
+        if retval is None:
+            retval = self.cache[domain] = self.create_records(domain)
+        return retval
+
+    def create_records(self, domain):
+        return self.create_SOA(domain) + \
+            self.create_NS(domain) + \
+            self.create_A_and_AAAA()
+
+    def create_SOA(self, domain):
+        return [names.dns.Record_SOA(
+            domain + '.' + self.origin, self.admin,
+            serial=self.serial,
+            refresh=self.refresh,
+            retry=self.retry,
+            expire=self.expire,
+            minimum=self.minimum,
+            ttl=self.ttl)]
+
+    def create_NS(self, domain):
+        return [names.dns.Record_NS(nameserver, self.ttl) for nameserver in self.nameservers]
+
+    def create_A_and_AAAA(self):
+        retval = []
+        if self.v4addresses is not None:
+            for v4address in self.v4addresses:
+                retval.append(names.dns.Record_A(v4address, self.ttl))
+        if self.v6addresses is not None:
+            for v6address in self.v6addresses:
+                retval.append(names.dns.Record_AAAA(self.v6address, self.ttl))
+        return retval
+
+    def _lookup(self, name, cls, type, timeout):
+        authority = []
+        results = []
+        cnames = []
+        additional = []
+
+        for record in self.get_records(name):
+            if record.ttl is not None:
+                ttl = record.ttl
+            else:
+                ttl = default_ttl
+
+            if record.TYPE == type or type == names.dns.ALL_RECORDS:
+                results.append(
+                    names.dns.RRHeader(name, record.TYPE, names.dns.IN, ttl, record, auth=True)
+                )
+            if record.TYPE == names.dns.CNAME:
+                cnames.append(
+                    names.dns.RRHeader(name, record.TYPE, names.dns.IN, ttl, record, auth=True)
+                )
+        if not results:
+            results = cnames
+
+        for record in results + authority:
+            section = {names.dns.NS: additional, names.dns.CNAME: results, names.dns.MX: additional}.get(record.type)
+            if section is not None:
+                n = str(record.payload.name)
+                print n
+                for rec in self.get_records(n.lower()):
+                    if rec.TYPE == names.dns.A:
+                        section.append(
+                            names.dns.RRHeader(n, names.dns.A, names.dns.IN, rec.ttl or default_ttl, rec, auth=True)
+                        )
+
+        if len(results) == 0:
+            return defer.fail(failure.Failure(names.dns.DomainError(name)))
+
+        return defer.succeed((results, authority, additional))
+            
+
+def create_resolvers_from_zone_files(zone_files):
+    retval = []
+    for zone_file in zone_files:
+        retval.append(names.authority.BindAuthority(zone_file))
+    return retval
+
+def error(msg):
+    print >>sys.stderr, "%s: %s" % (PROGNAME, msg)
+
+def get_serial(serial_file):
+    serial = None
+
+    try:
+        f = open(serial_file, 'a+')
+        f.seek(0, 0)
+    except IOError:
+        error("Cannot open '%s'" % serial_file, )
+        return None
+
+    try:
+        serial_prefix = int(time.strftime('%Y%m%d', time.localtime(time.time()))) * 100
+        try:
+            serial = int(f.read())
+            if serial - (serial % 100) != serial_prefix:
+                serial = serial_prefix + 1
+            else:
+                serial += 1
+        except ValueError:
+            serial = serial_prefix + 1
+
+        f.truncate()
+        f.seek(0, 0)
+        f.write(str(serial))
+    except IOError:
+        error("Cannot retrieve a serial number from '%s'" % serial_file)
+    f.close()
+    return serial
+
+def parse_options(argv): 
+    parser = optparse.OptionParser()
+    parser.add_option('-d', dest='zone_repo_dir', help='directory under which zone files are stored', default=DEFAULTS['zone_repo_dir'])
+    parser.add_option('-f', dest='config_file', help='configuration_file', default=DEFAULTS['config_file'])
+    parser.add_option('-n', dest='serial_file', help='file storing the last serial number', default=DEFAULTS['serial_file'])
+    return parser.parse_args(argv)
+
+def read_config(config_file):
+    try:
+        config = ini.INIConfig(open(config_file))
+    except IOError:
+        error("Cannot open '%s' (%s)" % (config_file, sys.exc_value))
+        return None
+    except Exception:
+        error("Cannot parse '%s' (%s)" % (config_file, sys.exc_value))
+        return None
+    return config
+
+def getdict(dict, key, default=None):
+    try:
+        retval = dict[key]
+    except KeyError:
+        retval = default
+    return retval
+
+def classify_addresses(args):
+    v4addresses = []
+    v6addresses = []
+
+    for arg in args:
+        if arg.startswith('[') and arg.endswith(']'):
+            v6addresses.append(arg[1:-1])
+        else:
+            v4addresses.append(arg)
+
+    return v4addresses, v6addresses
+
+def csv(value):
+    value = value.strip()
+    if value == '':
+        return []
+    return re.split(r'\s*,\s*', value)
+
+def main(argv):
+    options, args = parse_options(argv[1:])
+
+    config = read_config(options.config_file)
+    if config is None:
+        return 1
+
+    serial_file = getdict(config, 'serial_file', DEFAULTS['serial_file'])
+
+    serial = get_serial(serial_file)
+    if serial is None:
+        return 1
+
+    soa_defaults = {}
+    for param in ['admin', 'refresh', 'retry', 'expire', 'minimum', 'ttl']:
+        soa_defaults[param] = getdict(config, param, DEFAULTS['soa'][param])
+    nameservers_default = getdict(config, 'nameservers', '')
+    addresses_defaults = getdict(config, 'addresses', '')
+
+    resolvers = []
+
+    resolvers += create_resolvers_from_zone_files(
+        (os.path.join(path, filename) \
+            for path, dirnames, filenames in os.walk(options.zone_repo_dir) \
+                for filename in filenames \
+                    if not filename.startswith('.')))
+    for origin, section in config._sections.iteritems():
+        soa = {}
+        for param in ['admin', 'refresh', 'retry', 'expire', 'minimum', 'ttl']:
+            soa[param] = getdict(section, param, soa_defaults[param])
+
+        nameservers = csv(getdict(section, 'nameservers', nameservers_default))
+
+        if len(nameservers) == 0:
+            error("No nameservers provided for domain %s" % origin)
+            return 1
+
+        v4addresses, v6addresses = classify_addresses(csv(getdict(section, 'addresses', nameservers_default)))
+
+        if len(v4addresses) == 0 and len(v6addresses) == 0:
+            error("No IP addresses are provided for domain %s" % origin)
+            return 1
+
+        for i in xrange(0, len(nameservers)):
+            if not nameservers[i].endswith('.'):
+                nameservers[i] += '.' + origin 
+
+        resolvers.append(AnyAuthority(
+            origin, v4addresses, v6addresses, nameservers, serial,
+            **soa))
+
+    factory = names.server.DNSServerFactory(resolvers, verbose=10)
+
+    reactor.listenTCP(53, factory)
+    reactor.listenUDP(53, names.dns.DNSDatagramProtocol(factory))
+    reactor.run()
+
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

@@ -1,0 +1,107 @@
+body, table {
+    font-family: sans-serif;
+    font-size: 16pt;
+}
+
+body {
+    text-align: center;
+}
+
+div.page {
+    width: 600px;
+    text-align: left;
+    margin: 0 auto;
+}
+
+div.page div.header h1 {
+    margin: 0 0;
+    text-align: center;
+    padding: 48px 0em 48px 2em;
+    font-size: 12pt;
+    letter-spacing: 2em;
+    font-family: serif;
+    color: #888;
+}
+
+div.page div.main {
+    margin-top: 48px;
+}
+
+div.page div.main div.flash {
+    border: 1px solid #cccccc;
+    border-radius: 8px;
+    box-shadow: 0px 0px 4px #888;
+    -moz-box-shadow: 0px 0px 4px #888;
+    -webkit-box-shadow: 0px 0px 4px #888;
+    padding: 16px 16px;
+    text-align: center;
+    margin: 0 0 1em 0;
+}
+
+div.page div.main form .fieldsets fieldset {
+    border: none;
+    margin: 0 0;
+    padding: 0 0;
+    margin-top: 16px;
+} 
+
+div.page div.main form .fieldsets fieldset.first {
+    margin-top: 0;
+}
+
+div.page div.main form fieldset legend {
+    padding: 4px 4px;
+    margin: 0 0;
+    display: block;
+    width: 100%;
+}
+
+div.page div.main form fieldset legend.focused {
+    background-color: #fcf;
+    color: #f08;
+}
+
+div.page div.main form div.field.sxs {
+    vertical-align: top;
+}
+
+div.page div.main form div.field.sxs label {
+}
+
+div.page div.main form div.field.seq label {
+    display: block;
+}
+
+div.page div.main form div.field.seq input.text_field {
+    width: 100%;
+    font-size: 16pt;
+}
+
+div.page div.main form div.form_footer {
+    text-align: center;
+}
+
+div.page div.main form div.form_footer input.submit_button {
+    font-size: 16pt;
+}
+
+div.page div.main form .attention {
+    text-align: center;
+}
+
+div.page div.main form .attention:after {
+    display: block;
+    content: "⬇⬇⬇";
+    font-size: 48px;
+    color: #f08;
+}
+
+div.page div.main form .attention .inplace input.text_field,
+div.page div.main form .attention .inplace {
+    font-size: 20pt;
+}
+
+div.page div.main form .attention .inplace input.text_field {
+    width: 160px !important;
+    height: 20pt;
+}

@@ -1,0 +1,4 @@
+RewriteEngine on
+RewriteCond %{REQUEST_URI} !^/media/
+Options +ExecCGI
+RewriteRule .* /cgi-bin/index.wsgi [L,PT]
