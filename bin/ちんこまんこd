@@ -6,6 +6,7 @@ import re
 import optparse
 from iniparse import ini
 import time
+import daemon
 
 import twisted.names.dns
 import twisted.names.server
@@ -28,6 +29,7 @@ DEFAULTS = {
     'zone_repo_dir': os.path.join(PKG_VAR_DIR, 'zones'),
     'config_file': os.path.join(PKG_ETC_DIR, 'config.ini'),
     'serial_file': os.path.join(PKG_VAR_DIR, 'serial'),
+    'foreground': False,
     'soa': dict(admin='', refresh=120, retry=60, expire=86400, minimum=43200, ttl=60)
     }
 
@@ -162,8 +164,9 @@ def get_serial(serial_file):
 def parse_options(argv): 
     parser = optparse.OptionParser()
     parser.add_option('-d', dest='zone_repo_dir', help='directory under which zone files are stored', default=DEFAULTS['zone_repo_dir'])
-    parser.add_option('-f', dest='config_file', help='configuration_file', default=DEFAULTS['config_file'])
+    parser.add_option('-c', dest='config_file', help='configuration_file', default=DEFAULTS['config_file'])
     parser.add_option('-n', dest='serial_file', help='file storing the last serial number', default=DEFAULTS['serial_file'])
+    parser.add_option('-f', dest='foreground', action='store_true', help='run the application foreground', default=DEFAULTS['foreground'])
     return parser.parse_args(argv)
 
 def read_config(config_file):
@@ -255,9 +258,19 @@ def main(argv):
 
     factory = names.server.DNSServerFactory(resolvers, verbose=10)
 
-    reactor.listenTCP(53, factory)
-    reactor.listenUDP(53, names.dns.DNSDatagramProtocol(factory))
-    reactor.run()
+    ports = [
+        reactor.listenTCP(53, factory),
+        reactor.listenUDP(53, names.dns.DNSDatagramProtocol(factory))]
+
+    if options.foreground:
+        reactor.run()
+    else:
+        ctx = daemon.DaemonContext(files_preserve=[port.socket for port in ports])
+        ctx.open()
+        try:
+            reactor.run()
+        finally:
+            ctx.close()
 
     return 0
 
