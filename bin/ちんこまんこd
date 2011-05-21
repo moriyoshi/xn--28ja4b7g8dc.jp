@@ -13,11 +13,11 @@ import twisted.names.server
 import twisted.names.authority
 import twisted.names.common
 import twisted.names as names
-try:
-    from twisted.internet import epollreactor
-    epollreactor.install()
-except:
-    pass
+# try:
+#     from twisted.internet import epollreactor
+#     epollreactor.install()
+# except:
+#     pass
 from twisted.internet import defer, reactor
 from twisted.python import failure
 
