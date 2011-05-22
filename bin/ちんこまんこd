@@ -5,6 +5,7 @@ import sys
 import re
 import optparse
 from iniparse import ini
+from iniparse.config import Undefined
 import time
 import daemon
 
@@ -20,6 +21,7 @@ import twisted.names as names
 #     pass
 from twisted.internet import defer, reactor
 from twisted.python import failure
+from twisted.enterprise import adbapi
 
 PROGNAME = os.path.basename(sys.argv[0])
 
@@ -38,14 +40,43 @@ DEFAULTS = {
     'soa': dict(admin='', refresh=120, retry=60, expire=86400, minimum=43200, ttl=60)
     }
 
+class Backend(object):
+    def __init__(self, origin):
+        self.origin = origin
+
+    def get(self, domain):
+        return defer.succeed(None)
+
+
+class DBBackend(Backend):
+    def __init__(self, origin, pool):
+        Backend.__init__(self, origin)
+        self.pool = pool
+
+    def get(self, domain):
+        deferred = defer.Deferred()
+        f = self.pool.runQuery('SELECT `type`, value FROM records WHERE domain=%s AND origin=%s', (domain, self.origin))
+        def receive_results(rows):
+            rows = list(rows)
+            if len(rows) == 0:
+                rows = None
+            deferred.callback(rows)
+        f.addCallbacks(receive_results)
+        return deferred
+
+
+def domain_belongs_to(a, b):
+    return a == b or (not a.startswith('.') and a.endswith('.' + b))
+
 class AnyAuthority(names.common.ResolverBase):
-    def __init__(self, origin, v4addresses, v6addresses, nameservers, serial, admin='', refresh=120, retry=60, expire=86400, minimum=43200, ttl=60):
+    def __init__(self, origin, v4addresses, v6addresses, nameservers, serial, hook=None, admin='', refresh=120, retry=60, expire=86400, minimum=43200, ttl=60):
         names.common.ResolverBase.__init__(self)
         self.origin = origin
         self.v4addresses = v4addresses
         self.v6addresses = v6addresses
         self.nameservers = nameservers
         self.serial = serial
+        self.hook = hook
         self.admin = admin
         self.refresh = refresh
         self.retry = retry
@@ -55,19 +86,53 @@ class AnyAuthority(names.common.ResolverBase):
         self.cache = {}
 
     def get_records(self, domain):
-        retval = self.cache.get(domain, None)
+        if not domain_belongs_to(domain, self.origin):
+            retval = []
+        else:
+            retval = self.cache.get(domain, None)
+
+        deferred = defer.Deferred()
         if retval is None:
-            retval = self.cache[domain] = self.create_records(domain)
-        return retval
+            def next(records):
+                self.cache[domain] = records
+                deferred.callback(records)
+            self.create_records(domain).addCallback(next)
+        else:
+            deferred.callback(retval)
+        return deferred
 
     def create_records(self, domain):
-        return self.create_SOA(domain) + \
-            self.create_NS(domain) + \
-            self.create_A_and_AAAA()
+        deferred = defer.Deferred()
+        if not domain_belongs_to(domain, self.origin):
+            deferred.success([])
+        else:
+            def next(records):
+                record_types = {}
+                if records is not None:
+                    for record in records:
+                        record_types.setdefault(record['type'], []).append(record)
+
+                retval = self.create_SOA(domain) + self.create_NS(domain)
+                if 'AAAA' not in record_types and 'A' not in record_types and 'CNAME' not in record_types:
+                    retval += self.create_A_and_AAAA()
+
+                for type, _records in record_types.iteritems():
+                    klass = getattr(names.dns, 'Record_%s' % type.upper(), None)
+                    if klass is None:
+                        continue
+                    for record in _records:
+                        retval.append(klass(record['value'], ttl=self.ttl))
+                deferred.callback(retval)
+
+            if self.hook is not None and domain not in self.nameservers and domain != self.origin:
+                self.hook.get(domain[0:-len(self.origin) - 1]).addCallback(next)
+            else:
+                next([])
+        return deferred
 
     def create_SOA(self, domain):
         return [names.dns.Record_SOA(
-            domain + '.' + self.origin, self.admin,
+            domain, self.admin,
             serial=self.serial,
             refresh=self.refresh,
             retry=self.retry,
@@ -89,44 +154,59 @@ class AnyAuthority(names.common.ResolverBase):
         return retval
 
     def _lookup(self, name, cls, type, timeout):
-        authority = []
-        results = []
-        cnames = []
-        additional = []
+        deferred = defer.Deferred()
+        def next(records):
+            authority = []
+            results = []
+            cnames = []
+            additional = []
 
-        for record in self.get_records(name):
-            if record.ttl is not None:
-                ttl = record.ttl
-            else:
-                ttl = default_ttl
+            for record in records:
+                if record.ttl is not None:
+                    ttl = record.ttl
+                else:
+                    ttl = default_ttl
 
-            if record.TYPE == type or type == names.dns.ALL_RECORDS:
-                results.append(
-                    names.dns.RRHeader(name, record.TYPE, names.dns.IN, ttl, record, auth=True)
-                )
-            if record.TYPE == names.dns.CNAME:
-                cnames.append(
-                    names.dns.RRHeader(name, record.TYPE, names.dns.IN, ttl, record, auth=True)
-                )
-        if not results:
-            results = cnames
+                if record.TYPE == type or type == names.dns.ALL_RECORDS:
+                    results.append(
+                        names.dns.RRHeader(name, record.TYPE, names.dns.IN, ttl, record, auth=True)
+                    )
+                if record.TYPE == names.dns.CNAME:
+                    cnames.append(
+                        names.dns.RRHeader(name, record.TYPE, names.dns.IN, ttl, record, auth=True)
+                    )
+            if not results:
+                results = cnames
 
-        for record in results + authority:
-            section = {names.dns.NS: additional, names.dns.CNAME: results, names.dns.MX: additional}.get(record.type)
-            if section is not None:
-                n = str(record.payload.name)
-                print n
-                for rec in self.get_records(n.lower()):
-                    if rec.TYPE == names.dns.A:
-                        section.append(
-                            names.dns.RRHeader(n, names.dns.A, names.dns.IN, rec.ttl or default_ttl, rec, auth=True)
-                        )
 
-        if len(results) == 0:
-            return defer.fail(failure.Failure(names.dns.DomainError(name)))
+            _records = results + authority
+            def _next():
+                while _records:
+                    record = _records.pop(0)
+                    section = {names.dns.NS: additional, names.dns.CNAME: results, names.dns.MX: additional}.get(record.type)
+                    if section is not None:
+                        _domain = str(record.payload.name).lower()
+                        self.get_records(_domain).addCallback(next, _domain)
+                        return
+                    
+                if len(results) == 0 and len(authority) == 0 and len(additional) == 0:
+                    deferred.errback(failure.Failure(names.dns.DomainError(name)))
+                else:
+                    deferred.callback((results, authority, additional))
 
-        return defer.succeed((results, authority, additional))
-            
+            def next(records, _domain):
+                if records is not None:
+                    for rec in records:
+                        if rec.TYPE == names.dns.A:
+                            section.append(
+                                names.dns.RRHeader(_domain, names.dns.A, names.dns.IN, rec.ttl or default_ttl, rec, auth=True)
+                            )
+                _next()
+
+            _next()
+
+        self.get_records(name).addCallback(next)
+        return deferred
 
 def create_resolvers_from_zone_files(zone_files):
     retval = []
@@ -158,8 +238,8 @@ def get_serial(serial_file):
         except ValueError:
             serial = serial_prefix + 1
 
-        f.truncate()
         f.seek(0, 0)
+        f.truncate()
         f.write(str(serial))
     except IOError:
         error("Cannot retrieve a serial number from '%s'" % serial_file)
@@ -229,6 +309,10 @@ def main(argv):
     nameservers_default = getdict(config, 'nameservers', '')
     addresses_defaults = getdict(config, 'addresses', '')
 
+    db_config_defaults = {}
+    for param in ['db.module', 'db.name', 'db.user', 'db.password']:
+        db_config_defaults[param] = getdict(config, param, '')
+
     resolvers = []
 
     resolvers += create_resolvers_from_zone_files(
@@ -236,6 +320,7 @@ def main(argv):
             for path, dirnames, filenames in os.walk(options.zone_repo_dir) \
                 for filename in filenames \
                     if not filename.startswith('.')))
+
     for origin, section in config._sections.iteritems():
         soa = {}
         for param in ['admin', 'refresh', 'retry', 'expire', 'minimum', 'ttl']:
@@ -247,6 +332,12 @@ def main(argv):
             error("No nameservers provided for domain %s" % origin)
             return 1
 
+        db_config = {}
+        for param in ['db.module', 'db.name', 'db.user', 'db.password']:
+            db_config[param] = getdict(section, param, db_config_defaults[param])
+        if db_config['db.module'] == '':
+            db_config = None
+
         v4addresses, v6addresses = classify_addresses(csv(getdict(section, 'addresses', nameservers_default)))
 
         if len(v4addresses) == 0 and len(v6addresses) == 0:
@@ -257,9 +348,19 @@ def main(argv):
             if not nameservers[i].endswith('.'):
                 nameservers[i] += '.' + origin 
 
+        if db_config is not None:
+            pool = adbapi.ConnectionPool(
+                db_config['db.module'],
+                database=db_config['db.name'],
+                user=db_config['db.user'],
+                password=db_config['db.password'])
+            backend = DBBackend(origin, pool)
+        else:
+            backend = None
+
         resolvers.append(AnyAuthority(
             origin, v4addresses, v6addresses, nameservers, serial,
-            **soa))
+            backend, **soa))
 
     factory = names.server.DNSServerFactory(resolvers, verbose=10)
 
