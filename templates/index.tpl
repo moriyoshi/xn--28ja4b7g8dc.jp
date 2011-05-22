@@ -16,28 +16,28 @@
     {% endif %}
     <form action="/" method="post" name="main">
       <div class="field seq attention">
-        <span class="inplace"><input type="text" id="main.subdomain" class="text_field" name="subdomain" />.ちんこまんこ.jp</span>
+        <span class="inplace"><input type="text" id="main.subdomain" class="text_field" name="subdomain" value="{{ subdomain }}" />.ちんこまんこ.jp</span>
         を取得
       </div>
       <div class="fieldsets">
         <fieldset class="first">
           <legend class="field sxs">
-            <input type="radio" id="main.entry_type.0" name="entry_type" value="0">
+            <input type="radio" id="main.entry_type.0" name="entry_type" value="0" {%if (entry_type == '0') %}checked="checked"{% endif %}>
             <label for="main.entry_type.0">CNAMEエントリを追加する</label>
           </legend>
           <div class="field seq">
             <label for="main.domain_name">ドメイン名</label>
-            <input type="text" id="main.domain_name" class="text_field" name="domain_name" value="" />
+            <input type="text" id="main.domain_name" class="text_field" name="domain_name" value="{{ domain_name }}" />
           </div>
         </fieldset>
         <fieldset>
           <legend>
-            <input type="radio" name="entry_type" value="1" id="main.entry_type.1">
+            <input type="radio" name="entry_type" value="1" id="main.entry_type.1" {%if (entry_type == '1') %}checked="checked"{% endif %}>
             <label for="main.entry_type.1">リダイレクトを追加する</label>
           </legend>
           <div class="field seq">
             <label for="main.url">リダイレクト先URL</label>
-            <input type="text" id="main.url" class="text_field" name="domain_name" value="" />
+            <input type="text" id="main.url" class="text_field" name="url" value="{{ url }}" />
           </div>
         </fieldset>
       </div>
@@ -48,12 +48,14 @@
     <script type="text/javascript">
       var f = $("script:last").prev("form");
       var radios = f.find(":radio");
-      radios.change(function(e) {
+      function onRadioChange(e) {
         radios.each(function() {
           var c = $(this).parents("legend");
           c[["removeClass", "addClass"][+this.checked]].call(c, "focused");
         });
-      });
+      }
+      radios.change(onRadioChange);
+      $(onRadioChange);
     </script>
   </div>
 </div>

@@ -9,5 +9,5 @@ CREATE TABLE records(
     PRIMARY KEY (id)
 );
 
-CREATE INDEX domain ON records (domain); 
-CREATE INDEX origin ON records (origin); 
+CREATE UNIQUE INDEX records_domain ON records (domain); 
+CREATE UNIQUE INDEX records_origin ON records (origin); 
