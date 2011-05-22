@@ -42,13 +42,6 @@ DEFAULTS = {
     'soa': dict(admin='', refresh=120, retry=60, expire=86400, minimum=43200, ttl=60)
     }
 
-def resolve_uid(uid):
-    try:
-        _uid = int(uid)
-        return pwd.getpwuid(_uid)[2:4]
-    except ValueError:
-        return pwd.getpwnam(uid)[2:4]
-
 def resolve_gid(gid):
     try:
         _gid = int(gid)
