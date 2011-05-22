@@ -326,15 +326,10 @@ def main(argv):
     if serial is None:
         return 1
 
-    soa_defaults = {}
-    for param in ['admin', 'refresh', 'retry', 'expire', 'minimum', 'ttl']:
-        soa_defaults[param] = getdict(config['global'], param, DEFAULTS['soa'][param])
-    nameservers_default = getdict(config['global'], 'nameservers', '')
-    addresses_defaults = getdict(config['global'], 'addresses', '')
-
+    soa_defaults = DEFAULTS['soa']
+    nameservers_default = ''
+    addresses_default = ''
     db_config_defaults = {}
-    for param in ['db.module', 'db.name', 'db.user', 'db.password']:
-        db_config_defaults[param] = getdict(config['global'], param, '')
 
     resolvers = []
 
@@ -357,11 +352,11 @@ def main(argv):
 
         db_config = {}
         for param in ['db.module', 'db.name', 'db.user', 'db.password']:
-            db_config[param] = getdict(section, param, db_config_defaults[param])
+            db_config[param] = getdict(section, param, db_config_defaults.get(param, ''))
         if db_config['db.module'] == '':
             db_config = None
 
-        v4addresses, v6addresses = classify_addresses(csv(getdict(section, 'addresses', nameservers_default)))
+        v4addresses, v6addresses = classify_addresses(csv(getdict(section, 'addresses', addresses_default)))
 
         if len(v4addresses) == 0 and len(v6addresses) == 0:
             error("No IP addresses are provided for domain %s" % origin)
