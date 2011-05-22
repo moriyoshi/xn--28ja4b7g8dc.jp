@@ -8,5 +8,5 @@ CREATE TABLE redirects(
     PRIMARY KEY (id)
 );
 
-CREATE UNIQUE INDEX redirects_domain ON redirects (domain); 
-CREATE UNIQUE INDEX redirects_origin ON redirects (origin); 
+CREATE UNIQUE INDEX redirects_domain ON redirects (domain, origin); 
+CREATE INDEX redirects_origin ON redirects (origin); 
