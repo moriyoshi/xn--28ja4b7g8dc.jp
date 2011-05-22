@@ -119,7 +119,7 @@ def index(request):
 
                 cur = conn.cursor()
                 cur.execute("REPLACE INTO records (`type`, `domain`, `origin`, `value`) VALUES (%s, %s, %s, %s)", 'CNAME', _subdomain, origin, _domain_name)
-                cur.execute("DELETE FROM redirects WHERE `domain`=%s AND `origin` = %s", _subdomain, origin)
+                cur.execute("DELETE FROM redirects WHERE `domain`=%s AND `origin`=%s", _subdomain, origin)
                 conn.commit()
                 message = u'正常に終了しました'
             else:
@@ -129,7 +129,7 @@ def index(request):
                     break
                 cur = conn.cursor()
                 cur.execute("REPLACE INTO redirects (`domain`, `origin`, `url`) VALUES (%s, %s, %s)", _subdomain, origin, url)
-                cur.execute("DELETE FROM records WHERE `domain`=%s AND `origin` = %s", _subdomain, origin)
+                cur.execute("DELETE FROM records WHERE `domain`=%s AND `origin`=%s", _subdomain, origin)
                 conn.commit()
                 message = u'正常に終了しました'
             break
