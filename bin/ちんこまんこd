@@ -3,6 +3,8 @@
 import os
 import sys
 import re
+import pwd
+import grp
 import optparse
 from iniparse import ini
 from iniparse.config import Undefined
@@ -39,6 +41,27 @@ DEFAULTS = {
     'foreground': False,
     'soa': dict(admin='', refresh=120, retry=60, expire=86400, minimum=43200, ttl=60)
     }
+
+def resolve_uid(uid):
+    try:
+        _uid = int(uid)
+        return pwd.getpwuid(_uid)[2:4]
+    except ValueError:
+        return pwd.getpwnam(uid)[2:4]
+
+def resolve_gid(gid):
+    try:
+        _gid = int(gid)
+        return _gid
+    except ValueError:
+        return grp.getgrnam(gid)[2]
+
+def resolve_uid(uid):
+    try:
+        _uid = int(uid)
+        return (_uid, None)
+    except ValueError:
+        return pwd.getpwnam(uid)[2:4]
 
 class Backend(object):
     def __init__(self, origin):
@@ -297,7 +320,7 @@ def main(argv):
     if config is None:
         return 1
 
-    serial_file = getdict(config, 'serial_file', DEFAULTS['serial_file'])
+    serial_file = getdict(config['global'], 'serial_file', DEFAULTS['serial_file'])
 
     serial = get_serial(serial_file)
     if serial is None:
@@ -305,13 +328,13 @@ def main(argv):
 
     soa_defaults = {}
     for param in ['admin', 'refresh', 'retry', 'expire', 'minimum', 'ttl']:
-        soa_defaults[param] = getdict(config, param, DEFAULTS['soa'][param])
-    nameservers_default = getdict(config, 'nameservers', '')
-    addresses_defaults = getdict(config, 'addresses', '')
+        soa_defaults[param] = getdict(config['global'], param, DEFAULTS['soa'][param])
+    nameservers_default = getdict(config['global'], 'nameservers', '')
+    addresses_defaults = getdict(config['global'], 'addresses', '')
 
     db_config_defaults = {}
     for param in ['db.module', 'db.name', 'db.user', 'db.password']:
-        db_config_defaults[param] = getdict(config, param, '')
+        db_config_defaults[param] = getdict(config['global'], param, '')
 
     resolvers = []
 
@@ -371,7 +394,10 @@ def main(argv):
     if options.foreground:
         reactor.run()
     else:
-        ctx = daemon.DaemonContext(files_preserve=[port.socket for port in ports])
+        uid, gid = resolve_uid(getdict(config['global'], 'uid', 0))
+        gid = resolve_gid(getdict(config['global'], 'gid', gid))
+        ctx = daemon.DaemonContext(files_preserve=[port.socket for port in ports],
+                                   uid=uid, gid=gid)
         ctx.open()
         try:
             reactor.run()
