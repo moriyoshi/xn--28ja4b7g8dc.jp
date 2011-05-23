@@ -118,7 +118,7 @@ def index(request):
                 cur.execute("REPLACE INTO redirects (`domain`, `origin`, `url`) VALUES (%s, %s, %s)", _subdomain, origin, url)
                 cur.execute("DELETE FROM records WHERE `domain`=%s AND `origin`=%s", _subdomain, origin)
                 conn.commit()
-                message = u'正常に終了しました'
+                message = u'登録しました'
             elif entry_type == '1':
                 domain_name = request.values.get('domain_name', '')
                 try:
@@ -131,7 +131,7 @@ def index(request):
                 cur.execute("REPLACE INTO records (`type`, `domain`, `origin`, `value`) VALUES (%s, %s, %s, %s)", 'CNAME', _subdomain, origin, _domain_name)
                 cur.execute("DELETE FROM redirects WHERE `domain`=%s AND `origin`=%s", _subdomain, origin)
                 conn.commit()
-                message = u'正常に終了しました'
+                message = u'登録しました'
             break
     else:
         url = 'http://'
