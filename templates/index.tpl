@@ -31,6 +31,7 @@
       <div class="field seq attention">
         <span class="inplace"><input type="text" id="main.subdomain" class="text_field" name="subdomain" value="{{ subdomain }}" />.ちんこまんこ.jp</span>
         を取得
+      <p class="description">(例) げんきな.ちんこまんこ.jp / げ.ん.き.な.ちんこまんこ.jp</p>
       </div>
       <div class="fieldsets">
         <fieldset class="first field-redirect">
@@ -52,8 +53,8 @@
           <div class="field seq">
             <label for="main.domain_name">ドメイン名</label>
             <input type="text" id="main.domain_name" class="text_field" name="domain_name" value="{{ domain_name }}" />
+            <p class="description">上級者向けです。ちんこまんこ.jp の DNS に CNAME エントリを追加します。</p>
           </div>
-          <p class="description">上級者向けです。ちんこまんこ.jp の DNS に CNAME エントリを追加します。</p>
         </fieldset>
       </div>
       <div class="form_footer">
@@ -87,6 +88,9 @@
       subdomainField.keyup(onUrlFieldChange);
       urlField.keyup(onUrlFieldChange);
     </script>
+  </div>
+  <div class="footer">
+    View source code at <a href="http://github.com/moriyoshi/xn--28ja4b7g8dc.jp">http://github.com/moriyoshi/xn--28ja4b7g8dc.jp</a>
   </div>
 </div>
 </body>
