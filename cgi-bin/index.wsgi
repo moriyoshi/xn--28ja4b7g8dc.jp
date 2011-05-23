@@ -110,6 +110,16 @@ def index(request):
                 break
 
             if entry_type == '0':
+                url = request.values.get('url', '').strip()
+                if url == '':
+                    message = u'リダイレクト先URLを指定してください'
+                    break
+                cur = conn.cursor()
+                cur.execute("REPLACE INTO redirects (`domain`, `origin`, `url`) VALUES (%s, %s, %s)", _subdomain, origin, url)
+                cur.execute("DELETE FROM records WHERE `domain`=%s AND `origin`=%s", _subdomain, origin)
+                conn.commit()
+                message = u'正常に終了しました'
+            elif entry_type == '1':
                 domain_name = request.values.get('domain_name', '')
                 try:
                     _domain_name = validate_and_convert_domain(domain_name, u'CNAMEドメイン名')
@@ -122,17 +132,10 @@ def index(request):
                 cur.execute("DELETE FROM redirects WHERE `domain`=%s AND `origin`=%s", _subdomain, origin)
                 conn.commit()
                 message = u'正常に終了しました'
-            else:
-                url = request.values.get('url', '').strip()
-                if url == '':
-                    message = u'リダイレクト先URLを指定してください'
-                    break
-                cur = conn.cursor()
-                cur.execute("REPLACE INTO redirects (`domain`, `origin`, `url`) VALUES (%s, %s, %s)", _subdomain, origin, url)
-                cur.execute("DELETE FROM records WHERE `domain`=%s AND `origin`=%s", _subdomain, origin)
-                conn.commit()
-                message = u'正常に終了しました'
             break
+    else:
+        url = 'http://'
+        entry_type = '0'
     return render_template('index.tpl', **locals())
 
 

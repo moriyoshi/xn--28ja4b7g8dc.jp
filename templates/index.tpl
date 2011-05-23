@@ -33,24 +33,25 @@
         を取得
       </div>
       <div class="fieldsets">
-        <fieldset class="first">
-          <legend class="field sxs">
-            <input type="radio" id="main.entry_type.0" name="entry_type" value="0" {%if (entry_type == '0') %}checked="checked"{% endif %}>
-            <label for="main.entry_type.0">CNAMEエントリを追加する</label>
-          </legend>
-          <div class="field seq">
-            <label for="main.domain_name">ドメイン名</label>
-            <input type="text" id="main.domain_name" class="text_field" name="domain_name" value="{{ domain_name }}" />
-          </div>
-        </fieldset>
-        <fieldset>
+        <fieldset class="first field-redirect">
           <legend>
-            <input type="radio" name="entry_type" value="1" id="main.entry_type.1" {%if (entry_type == '1') %}checked="checked"{% endif %}>
-            <label for="main.entry_type.1">リダイレクトする</label>
+            <input type="radio" name="entry_type" value="0" id="main.entry_type.0" {%if (entry_type == '0') %}checked="checked"{% endif %}>
+            <label for="main.entry_type.0">リダイレクトする</label>
           </legend>
           <div class="field seq">
             <label for="main.url">リダイレクト先URL</label>
             <input type="text" id="main.url" class="text_field" name="url" value="{{ url }}" />
+            <p class="description"></p>
+          </div>
+        </fieldset>
+        <fieldset class="field-cname">
+          <legend class="field sxs">
+            <input type="radio" id="main.entry_type.1" name="entry_type" value="1" {%if (entry_type == '1') %}checked="checked"{% endif %}>
+            <label for="main.entry_type.1">CNAMEエントリを追加する</label>
+          </legend>
+          <div class="field seq">
+            <label for="main.domain_name">ドメイン名</label>
+            <input type="text" id="main.domain_name" class="text_field" name="domain_name" value="{{ domain_name }}" />
           </div>
         </fieldset>
       </div>
@@ -65,10 +66,25 @@
         radios.each(function() {
           var c = $(this).parents("legend");
           c[["removeClass", "addClass"][+this.checked]].call(c, "focused");
+          $(this).parents("fieldset").find(".text_field").attr("disabled", !this.checked);
         });
       }
       radios.change(onRadioChange);
       $(onRadioChange);
+      var subdomainField = f.find("[name='subdomain']");
+      var urlField = f.find("[name='url']");
+      var redirect = f.find(".field-redirect");
+      function onUrlFieldChange() {
+        if (subdomainField.val() != "" && urlField.val() != "") {
+          var desc = redirect.find(".field .description")
+            .html('http://<span class="subdomain"></span>.ちんこまんこ.jp/ にアクセスすると、' + 
+                    '<span class="url"></span>に転送されます。');
+          desc.find(".subdomain").text(subdomainField.val());
+          desc.find(".url").text(urlField.val());
+        }
+      }
+      subdomainField.keyup(onUrlFieldChange);
+      urlField.keyup(onUrlFieldChange);
     </script>
   </div>
 </div>
