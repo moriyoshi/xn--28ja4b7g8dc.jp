@@ -41,7 +41,7 @@
           <div class="field seq">
             <label for="main.url">リダイレクト先URL</label>
             <input type="text" id="main.url" class="text_field" name="url" value="{{ url }}" />
-            <p class="description"></p>
+            <p class="description">転送アドレスを指定します。</p>
           </div>
         </fieldset>
         <fieldset class="field-cname">
@@ -53,6 +53,7 @@
             <label for="main.domain_name">ドメイン名</label>
             <input type="text" id="main.domain_name" class="text_field" name="domain_name" value="{{ domain_name }}" />
           </div>
+          <p class="description">上級者向けです。ちんこまんこ.jp の DNS に CNAME エントリを追加します。</p>
         </fieldset>
       </div>
       <div class="form_footer">

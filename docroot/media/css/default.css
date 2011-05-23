@@ -106,8 +106,15 @@ div.page div.main form .attention .inplace input.text_field {
     height: 20pt;
 }
 
-div.page div.main form .field-redirect .description {
+div.page div.main form .description {
     color: #666;
     font-size: 10pt;
 }
 
+div.page div.main form .field-redirect .description .subdomain {
+    font-weight: bold;
+}
+
+div.page div.main form .field-redirect .description .url {
+    font-weight: bold;
+}
