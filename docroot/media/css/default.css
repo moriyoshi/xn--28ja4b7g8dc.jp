@@ -119,6 +119,43 @@ div.page div.main form .field-redirect .description .url {
     font-weight: bold;
 }
 
+div.page div.main div.twitter {
+    overflow: hidden;
+}
+
+div.page div.main div.twitter h2 {
+    font-size: 14pt;
+    font-weight: bold;
+    text-align: center;
+    color: #f08;
+}
+
+div.page div.main div.twitter ul {
+    list-style-type: none;
+    padding: 0 0;
+    margin: 0 0; 
+}
+
+div.page div.main div.twitter ul li {
+    clear: both;
+    font-size: 10pt;
+}
+
+div.page div.main div.twitter ul li .username {
+    color: #ccc;
+    text-align: right;
+}
+
+div.page div.main div.twitter ul li .username a {
+    color: #ccc;
+}
+
+div.page div.main div.twitter ul li img {
+    float: left;
+    margin-right: 8px;
+    margin-bottom: 4px;
+}
+
 div.page div.footer {
     text-align: center;
     color: #666;
@@ -128,4 +165,3 @@ div.page div.footer {
 div.page div.footer a {
     color: #666;
 }
-

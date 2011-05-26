@@ -17,6 +17,7 @@ local_manager = LocalManager([local])
 tpl_env = Environment(loader=FileSystemLoader(os.path.join(PREFIX, "templates")), autoescape=True)
 url_map = Map()
 config = ini.INIConfig(open(os.path.join(PREFIX, 'etc', 'ちんこまんこd', 'config.ini')))
+fetchd_config = ini.INIConfig(open(os.path.join(PREFIX, 'etc', 'ちんこまんこfetchd', 'config.ini')))
 
 def get_module(name):
     module = __import__(name)
@@ -72,6 +73,22 @@ def validate_and_convert_domain(domain, field):
     if domain is None or not re.match(ur'[0-9a-z][0-9a-z-]*', domain):
         raise Exception(u'%sに不正な文字が含まれています' % field)
     return unicode(domain, 'utf-8')
+
+def get_recent_tweets(n):
+    section = fetchd_config['global']
+    dbmodule = get_module(section['db.module'])
+    conn = dbmodule.connect(database=section['db.name'], user=getdict(section, 'db.user', ''), password=getdict(section, 'db.password', ''))
+    cur = conn.cursor()
+    cur.execute("SELECT id, user_id, user_name, timestamp, text, profile_image_url FROM timeline ORDER BY timestamp DESC LIMIT %d", n)
+    retval = []
+    for row in cur.fetchall():
+        retval.append(dict(id=row[0],
+                           user_id=row[1],
+                           user_name=unicode(row[2], 'utf-8'),
+                           timestamp=row[3],
+                           text=unicode(row[4], 'utf-8'),
+                           profile_image_url = row[5]))
+    return retval
 
 @expose('/')
 def index(request):
@@ -136,6 +153,9 @@ def index(request):
     else:
         url = 'http://'
         entry_type = '0'
+    
+    tweets = get_recent_tweets(10)
+
     return render_template('index.tpl', **locals())
 
 

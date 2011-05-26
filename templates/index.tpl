@@ -88,6 +88,14 @@
       subdomainField.keyup(onUrlFieldChange);
       urlField.keyup(onUrlFieldChange);
     </script>
+    <div class="twitter">
+      <h2>ツイッターで『ちんこまんこ』言っているひとたち</h2>
+      <ul>
+      {% for tweet in tweets %}
+        <li><img src="{{ tweet.profile_image_url }}" /><div>{{ tweet.text|replace('ちんこまんこ', '<strong>ちんこまんこ</strong>')|safe }}</div><div class="username">{{ tweet.user_name }} on <a href="http://twitter.com/{{ tweet.user_name }}/status/{{ tweet.id }}">{{ tweet.timestamp }}</a></div></li>
+      {% endfor %}
+      </ul>
+    </div>
   </div>
   <div class="footer">
     View source code at <a href="http://github.com/moriyoshi/xn--28ja4b7g8dc.jp">http://github.com/moriyoshi/xn--28ja4b7g8dc.jp</a>
