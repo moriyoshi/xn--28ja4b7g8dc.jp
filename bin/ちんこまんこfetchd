@@ -1,0 +1,175 @@
+#!/usr/bin/python
+# encoding: utf-8
+import os
+import sys
+import zmq
+import optparse
+from iniparse import ini
+from iniparse.config import Undefined
+import simplejson as json
+import httplib
+import urllib
+import base64
+import time
+import logging
+import daemon
+from email.Utils import parsedate_tz, mktime_tz
+
+PROGNAME = os.path.basename(sys.argv[0])
+
+PREFIX = os.path.dirname(os.path.realpath(os.path.dirname(sys.argv[0])))
+
+ETC_DIR = os.path.join(PREFIX, 'etc')
+PKG_ETC_DIR = os.path.join(ETC_DIR, PROGNAME)
+VAR_DIR = os.path.join(PREFIX, 'var', 'lib')
+PKG_VAR_DIR = os.path.join(VAR_DIR, PROGNAME)
+
+DEFAULTS = {
+    'config_file': os.path.join(PKG_ETC_DIR, 'config.ini'),
+    'foreground': False,
+    }
+
+logging.basicConfig()
+log = logging.getLogger(PROGNAME)
+
+def utf8(v):
+    if isinstance(v, unicode):
+        return v.encode("utf-8")
+    else:
+        return v
+
+def resolve_gid(gid):
+    try:
+        _gid = int(gid)
+        return _gid
+    except ValueError:
+        return grp.getgrnam(gid)[2]
+
+def resolve_uid(uid):
+    try:
+        _uid = int(uid)
+        return (_uid, None)
+    except ValueError:
+        return pwd.getpwnam(uid)[2:4]
+
+def error(msg):
+    print >>sys.stderr, "%s: %s" % (PROGNAME, msg)
+
+def parse_options(argv): 
+    parser = optparse.OptionParser()
+    parser.add_option('-c', dest='config_file', help='configuration_file', default=DEFAULTS['config_file'])
+    parser.add_option('-f', dest='foreground', action='store_true', help='run the application foreground', default=DEFAULTS['foreground'])
+    return parser.parse_args(argv)
+
+def read_config(config_file):
+    try:
+        config = ini.INIConfig(open(config_file))
+    except IOError:
+        error("Cannot open '%s' (%s)" % (config_file, sys.exc_value))
+        return None
+    except Exception:
+        error("Cannot parse '%s' (%s)" % (config_file, sys.exc_value))
+        return None
+    return config
+
+def getdict(dict, key, default=None):
+    try:
+        retval = dict[key]
+    except KeyError:
+        retval = default
+    return retval
+
+def get_module(name):
+    module = __import__(name)
+    for n in name.split('.')[1:]:
+        module = module.getattr(n)
+    return module
+
+def run(config):
+    gconfig = config['global']
+
+    host = gconfig.host
+    url_pattern = gconfig.url_pattern
+
+    db_module = get_module(gconfig['db.module'])
+
+    ctx = zmq.Context()
+    pub = ctx.socket(zmq.PUB)
+    pub.connect(gconfig.queue)
+
+    dbconn = db_module.connect(database=gconfig['db.name'],
+                               user=getdict(gconfig, 'db.user', ''),
+                               password=getdict(gconfig, 'db.password', ''))
+
+    query = u'ちんこまんこ'
+
+    headers = {
+        'Accept': '*/*',
+        'User-Agent': '%s/1.0' % PROGNAME,
+        'Connection': 'keep-alive',
+        }
+
+    while True:
+        log.info("Connecting to %s" % host)
+        conn = httplib.HTTPConnection(host)
+        while True:
+            try:
+                request_uri = url_pattern % urllib.quote(utf8(query))
+                log.info("GET request to %s" % request_uri)
+                conn.request('GET', request_uri, headers=headers)
+
+                resp = conn.getresponse()
+                log.info("Got response")
+                if resp.status != 200:
+                    log.error('Server returned status=%s' % resp.status)
+                    return 1
+
+                cur = dbconn.cursor()
+                for result in json.loads(resp.read())['results']:
+                    timestamp = '%04d-%02d-%02d %02d:%02d:%02d' % time.localtime(mktime_tz(parsedate_tz(result['created_at'])))[0:6]
+                    try:
+                        cur.execute('INSERT INTO timeline (id, user_id, user_name, timestamp, text, profile_image_url) VALUES (%s, %s, %s, %s, %s, %s)', utf8(result['id_str']), utf8(result['from_user_id_str']), utf8(result['from_user']), timestamp, utf8(result['text']), utf8(result['profile_image_url']))
+                        pub.send(json.dumps(result))
+                    except Exception:
+                        pass
+                dbconn.commit()
+
+                time.sleep(60)
+                if resp.getheader('Connection') == 'closed':
+                    break
+            except KeyboardInterrupt:
+                return 0
+            except:
+                log.exception("Exception occurred")
+                time.sleep(120)
+                break
+
+def main(argv):
+    options, args = parse_options(argv[1:])
+
+    config = read_config(options.config_file)
+    if config is None:
+        return 1
+
+    if options.foreground:
+        run(config)
+    else:
+        uid, gid = None, None
+        try:
+            uid = getdict(config['global'], 'uid', None)
+            if uid is not None:
+                uid, gid = resolve_uid(uid)
+            if gid is not None:
+                gid = resolve_gid(getdict(config['global'], 'gid', gid))
+        except:
+            pass
+        ctx = daemon.DaemonContext(uid=uid, gid=gid)
+        ctx.open()
+        try:
+            run(config)
+        finally:
+            ctx.close()
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

@@ -1,0 +1,109 @@
+#!/usr/bin/python
+
+import os
+import sys
+import re
+import pwd
+import grp
+import optparse
+from iniparse import ini
+from iniparse.config import Undefined
+import time
+import daemon
+import zmq
+
+PROGNAME = os.path.basename(sys.argv[0])
+
+PREFIX = os.path.dirname(os.path.realpath(os.path.dirname(sys.argv[0])))
+
+ETC_DIR = os.path.join(PREFIX, 'etc')
+PKG_ETC_DIR = os.path.join(ETC_DIR, PROGNAME)
+VAR_DIR = os.path.join(PREFIX, 'var', 'lib')
+PKG_VAR_DIR = os.path.join(VAR_DIR, PROGNAME)
+
+DEFAULTS = {
+    'config_file': os.path.join(PKG_ETC_DIR, 'config.ini'),
+    'foreground': False,
+    }
+
+def resolve_gid(gid):
+    try:
+        _gid = int(gid)
+        return _gid
+    except ValueError:
+        return grp.getgrnam(gid)[2]
+
+def resolve_uid(uid):
+    try:
+        _uid = int(uid)
+        return (_uid, None)
+    except ValueError:
+        return pwd.getpwnam(uid)[2:4]
+
+def error(msg):
+    print >>sys.stderr, "%s: %s" % (PROGNAME, msg)
+
+def parse_options(argv): 
+    parser = optparse.OptionParser()
+    parser.add_option('-c', dest='config_file', help='configuration_file', default=DEFAULTS['config_file'])
+    parser.add_option('-f', dest='foreground', action='store_true', help='run the application foreground', default=DEFAULTS['foreground'])
+    return parser.parse_args(argv)
+
+def read_config(config_file):
+    try:
+        config = ini.INIConfig(open(config_file))
+    except IOError:
+        error("Cannot open '%s' (%s)" % (config_file, sys.exc_value))
+        return None
+    except Exception:
+        error("Cannot parse '%s' (%s)" % (config_file, sys.exc_value))
+        return None
+    return config
+
+def getdict(dict, key, default=None):
+    try:
+        retval = dict[key]
+    except KeyError:
+        retval = default
+    return retval
+
+def run(config):
+    ctx = zmq.Context()
+    backend = ctx.socket(zmq.PUB)
+    backend.bind(config['backend'].endpoint)
+    frontend = ctx.socket(zmq.SUB)
+    frontend.setsockopt(zmq.SUBSCRIBE, '')
+    frontend.bind(config['frontend'].endpoint)
+    zmq.device(zmq.QUEUE, frontend, backend)
+
+def main(argv):
+    options, args = parse_options(argv[1:])
+
+    config = read_config(options.config_file)
+    if config is None:
+        return 1
+
+    if options.foreground:
+        run(config)
+    else:
+        uid, gid = None, None
+        try:
+            uid = getdict(config['global'], 'uid', None)
+            if uid is not None:
+                uid, gid = resolve_uid(uid)
+            if gid is not None:
+                gid = resolve_gid(getdict(config['global'], 'gid', gid))
+        except:
+            pass
+        ctx = daemon.DaemonContext(uid=uid, gid=gid)
+        ctx.open()
+        try:
+            run(config)
+        finally:
+            ctx.close()
+
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
+
