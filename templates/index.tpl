@@ -58,7 +58,7 @@
         </fieldset>
       </div>
       <div class="form_footer">
-        <input type="submit" class="submit_button" value="生成する" />
+        <input type="submit" class="submit_button" value="取得する" />
       </div>
     </form>
     <script type="text/javascript">
