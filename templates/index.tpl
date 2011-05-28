@@ -31,7 +31,7 @@
       <div class="field seq attention">
         <span class="inplace"><input type="text" id="main.subdomain" class="text_field" name="subdomain" value="{{ subdomain }}" />.ちんこまんこ.jp</span>
         を取得
-      <p class="description">(例) げんきな.ちんこまんこ.jp / げ.ん.き.な.ちんこまんこ.jp</p>
+      <p class="description">(例) うんこ.ちんこまんこ.jp / う.ん.こ.ちんこまんこ.jp</p>
       </div>
       <div class="fieldsets">
         <fieldset class="first field-redirect">
