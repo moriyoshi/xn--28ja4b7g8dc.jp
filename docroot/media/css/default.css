@@ -19,6 +19,7 @@ div.page div.header h1 {
     padding: 48px 0em 48px 2em;
     font-size: 12pt;
     letter-spacing: 2em;
+    text-shadow: 0 0 4px #888;
     font-family: serif;
     color: #888;
 }
@@ -127,6 +128,8 @@ div.page div.main div.twitter h2 {
     font-size: 14pt;
     font-weight: bold;
     text-align: center;
+    text-shadow: 0 0 5px #888;
+    margin-bottom: 1em;
     color: #f08;
 }
 
@@ -139,6 +142,11 @@ div.page div.main div.twitter ul {
 div.page div.main div.twitter ul li {
     clear: both;
     font-size: 10pt;
+}
+
+div.page div.main div.twitter ul li strong {
+    color: #f9c;
+    font-size: 120%;
 }
 
 div.page div.main div.twitter ul li .username {
